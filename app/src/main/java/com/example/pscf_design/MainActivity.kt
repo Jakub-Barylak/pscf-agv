@@ -17,13 +17,15 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import java.lang.NumberFormatException
 import java.nio.charset.StandardCharsets
 
 
 class MainActivity : AppCompatActivity(), SeekBar.OnSeekBarChangeListener {
-
-    private val publishTopic = "agvSteering"
-    private val subscribeTopic = "idunno"
+    
+    private val speedTopic = "speed"
+    private val directionTopic = "direction"
+    private val agvInfoTopic = "someData"
 
     private val identifier = "my-mqtt-android-client"
     private var address: String? = null
@@ -80,44 +82,48 @@ class MainActivity : AppCompatActivity(), SeekBar.OnSeekBarChangeListener {
         upButton = findViewById(R.id.upButton)
         upButton.setOnClickListener {
 //            TODO publish data in the right format
-            publish("direction", "up")
+            publish(directionTopic, "up")
         }
 
         downButton = findViewById(R.id.downButton)
         downButton.setOnClickListener {
 //            TODO publish data in the right format
-            publish("direction", "down")
+            publish(directionTopic, "down")
         }
 
         leftButton = findViewById(R.id.leftButton)
         leftButton.setOnClickListener {
 //            TODO publish data in the right format
-            publish("direction", "left")
+            publish(directionTopic, "left")
         }
 
         rightButton = findViewById(R.id.rightButton)
         rightButton.setOnClickListener {
 //            TODO publish data in the right format
-            publish("direction", "right")
+            publish(directionTopic, "right")
         }
 
         connectButton = findViewById(R.id.connectButton)
         connectButton.setOnClickListener {
-//            TODO add username, password and port field
-//            TODO fetch the data and set variables accordingly
-            address = addressTextBox.text.toString()
-            port = portTextBox.text.toString().toInt()
-            username = usernameTextBox.text.toString()
-            password = passwordTextBox.text.toString()
+            try {
+                address = addressTextBox.text.toString()
+                port = portTextBox.text.toString().toInt()
+                username = usernameTextBox.text.toString()
+                password = passwordTextBox.text.toString()
+                connectMqttClient()
+            } catch (exception: NumberFormatException) {
+                Toast.makeText(this, "Please fill out the port", Toast.LENGTH_SHORT).show()
+            }
 
-            Toast.makeText(this, "$port $username $password", Toast.LENGTH_SHORT).show()
-            connectMqttClient()
+
         }
 
         agvSpeedSlider = findViewById(R.id.seekBar)
         agvSpeedSlider.setOnSeekBarChangeListener(this)
 
         agvInfo = findViewById(R.id.textView3)
+
+        updateInputs(false)
 
     }
 
@@ -126,7 +132,7 @@ class MainActivity : AppCompatActivity(), SeekBar.OnSeekBarChangeListener {
     override fun onStopTrackingTouch(seek: SeekBar) {
         Toast.makeText(this, "Speed: $agvSpeed", Toast.LENGTH_SHORT).show()
 //            TODO publish data in the right format
-        publish("speed", agvSpeed.toString())
+        publish(speedTopic, agvSpeed.toString())
     }
 
     override fun onProgressChanged(
@@ -146,17 +152,15 @@ class MainActivity : AppCompatActivity(), SeekBar.OnSeekBarChangeListener {
      * Connects, authenticates and subscribes the Mqtt client to a topic.
      */
     private fun connectMqttClient() {
-        connect()
-        authenticate()
-        subscribe("someData")
-    }
-
-    /**
-     * Creates a MQTT client and connects to a MQTT broker.
-     * Displays errors as  when address or port is null
-     */
-    private fun connect() {
-        if (address == null) {
+        if (username == null || username == "") {
+            Toast.makeText(this, "Please fill out the username", Toast.LENGTH_SHORT).show()
+            return
+        }
+        if (password == null || password == "") {
+            Toast.makeText(this, "Please fill out the password", Toast.LENGTH_SHORT).show()
+            return
+        }
+        if (address == null || address == "") {
             Toast.makeText(this, "Please fill in the address", Toast.LENGTH_SHORT).show()
             return
         }
@@ -164,6 +168,16 @@ class MainActivity : AppCompatActivity(), SeekBar.OnSeekBarChangeListener {
             Toast.makeText(this, "Please fill in the port", Toast.LENGTH_SHORT).show()
             return
         }
+        connect()
+        authenticate()
+        subscribe(agvInfoTopic)
+    }
+
+    /**
+     * Creates a MQTT client and connects to a MQTT broker.
+     * Displays errors as  when address or port is null
+     */
+    private fun connect() {
         client = MqttClient.builder()
             .useMqttVersion3()
             .identifier(identifier)
@@ -177,14 +191,6 @@ class MainActivity : AppCompatActivity(), SeekBar.OnSeekBarChangeListener {
      * Authenticates with the MQTT broker using username and password.
      */
     private fun authenticate() {
-        if (username == null) {
-            Toast.makeText(this, "Please fill out the username", Toast.LENGTH_SHORT).show()
-            return
-        }
-        if (password == null) {
-            Toast.makeText(this, "Please fill out the password", Toast.LENGTH_SHORT).show()
-            return
-        }
         client!!.connectWith()
             .simpleAuth()
             .username(username!!)
@@ -218,7 +224,10 @@ class MainActivity : AppCompatActivity(), SeekBar.OnSeekBarChangeListener {
      */
     private fun updateMqttClientState() {
         val connected = client!!.state.toString() == "CONNECTED"
+        updateInputs(connected)
+    }
 
+    private fun updateInputs(connected: Boolean) {
         upButton.isEnabled = connected
         upButton.isClickable = connected
         downButton.isEnabled = connected
